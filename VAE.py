@@ -7,7 +7,8 @@ from tensorflow.examples.tutorials.mnist import input_data
 mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 n_samples = mnist.train.num_examples
 print("Number of samples {} Shape of y[{}] Shape of X[{}]".format(n_samples, mnist.train.labels.shape, mnist.train.images.shape))
-# plt.imshow(np.reshape(-mnist.train.images[4242], (28, 28)), interpolation='none',cmap=plt.get_cmap('gray'))
+# plt.imshow(np.reshape(-mnist.train.images[4242], (28, 28)), interpolation='none', cmap=plt.get_cmap('gray'))
+# plt.show()
 
 n_z = 10
 input_size = 784
