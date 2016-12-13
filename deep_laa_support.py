@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.matlib
 import tensorflow as tf
 import scipy.io
 import os
@@ -45,6 +46,15 @@ def get_constant_y(batch_size, category_size):
         constant_y[i] = tf.constant(constant_tmp)
     return constant_y
 
+def get_majority_y(user_labels, category_num):
+    n_samples, source_mul_category = np.shape(user_labels)
+    source_num = source_mul_category / category_num
+    tmp = np.eye(category_num)
+    template = np.matlib.repmat(tmp, source_num, 1)
+    majority_y = np.matmul(user_labels, template)
+    majority_y = np.divide(majority_y, np.matlib.repmat(np.sum(majority_y, 1, keepdims=True), 1, category_num))
+    return majority_y
+    
 
 def gen_data(filename, data_num, source_num, category_num):
     data_label_vectors = np.zeros((data_num, source_num*category_num))
