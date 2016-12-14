@@ -18,7 +18,7 @@ majority_y = dls.get_majority_y(user_labels, category_size)
 input_size = source_num * category_size
 batch_size = n_samples
 
-n_z = 2
+n_z = 1
 n_hidden_encoder = [10, 5]
 n_hidden_decoder = [5, 10]
 n_hidden_classifier = [10, 5]
@@ -191,7 +191,7 @@ with tf.Session() as sess:
                 
         print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit) / n_samples)
     
-    epochs = 300
+    epochs = 100
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
         total_cost = 0.0
@@ -202,8 +202,8 @@ with tf.Session() as sess:
             _y_prob_classifier = sess.run([y_classifier], feed_dict={x:batch_x})
             # x, y -> x, update VAE
             y_prob_classifier = np.reshape(_y_prob_classifier, (batch_size, category_size))
-            _, batch_reconstr_all = sess.run(
-                [optimizer_VAE, reconstr_x],
+            _, batch_reconstr_all, batch_z, batch_z_mean, batch_z_log_sigma_sq = sess.run(
+                [optimizer_VAE, reconstr_x, z, z_mean, z_log_sigma_sq],
                 feed_dict={x:batch_x, mask:batch_mask, y_prob:y_prob_classifier})
             # x -> y, update classifier
             _, batch_y_classifier, batch_hit_num = sess.run(
@@ -211,6 +211,14 @@ with tf.Session() as sess:
                 feed_dict={x:batch_x, mask:batch_mask, y_label:batch_y_label, y_prior:batch_majority_y, y_kl_strength:0.001})
             
             total_hit += batch_hit_num
+            
+#             if epoch == epochs-1:
+#                 print 'z'
+#                 print batch_z
+#                 print 'z_mean'
+#                 print batch_z_mean
+#                 print 'z_log_sigma_sq'
+#                 print batch_z_log_sigma_sq
              
             # debug output
 #             if epoch == epochs-1:
