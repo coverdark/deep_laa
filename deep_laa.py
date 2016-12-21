@@ -4,7 +4,9 @@ import deep_laa_support as dls
 import sys
 
 # read data
-filename = "bluebird_data"
+filename = "web_processed_data_feature_2"
+# filename = "age_data_3_category"
+# filename = "bluebird_data"
 data_all = np.load(filename+'.npz')
 user_labels = data_all['user_labels']
 label_mask = data_all['label_mask']
@@ -18,10 +20,10 @@ majority_y = dls.get_majority_y(user_labels, category_size)
 input_size = source_num * category_size
 batch_size = n_samples
 
-n_z = 1
-n_hidden_encoder = [10, 5]
-n_hidden_decoder = [5, 10]
-n_hidden_classifier = [10, 5]
+n_z = 2
+n_hidden_encoder = [20, 5]
+n_hidden_decoder = [5, 20]
+n_hidden_classifier = [20, 5]
 
 # define x
 x = tf.placeholder(dtype=tf.float32, shape=(batch_size, input_size))
@@ -114,14 +116,14 @@ with tf.name_scope('classifier'):
     weights_h_1_classifier = tf.Variable(
         tf.truncated_normal(shape=(input_size, n_hidden_classifier[0]), mean=0.0, stddev=.01), name='w_h_1_encoder')
     biases_h_1_classifier = tf.Variable(
-        tf.zeros(shape=([n_hidden_encoder[0]]), dtype=tf.float32), name='b_h_1_encoder')
+        tf.zeros(shape=([n_hidden_classifier[0]]), dtype=tf.float32), name='b_h_1_encoder')
     h_1_classifier = tf.nn.softplus(
         tf.add(tf.matmul(x, weights_h_1_classifier), biases_h_1_classifier))
     # classifier h_2
     weights_h_2_classifier = tf.Variable(
         tf.truncated_normal(shape=(n_hidden_classifier[0], n_hidden_classifier[1]), mean=0.0, stddev=.01), name='w_h_2_encoder')
     biases_h_2_classifier = tf.Variable(
-        tf.zeros(shape=([n_hidden_encoder[1]]), dtype=tf.float32), name='b_h_2_encoder')
+        tf.zeros(shape=([n_hidden_classifier[1]]), dtype=tf.float32), name='b_h_2_encoder')
     h_2_classifier = tf.nn.softplus(
         tf.add(tf.matmul(h_1_classifier, weights_h_2_classifier), biases_h_2_classifier))
     # classifier y
@@ -140,7 +142,7 @@ loss_reconstr = tf.reduce_mean(
     tf.reduce_sum(tf.mul(reconstr_x, y_prob), reduction_indices=1))
 loss_z = -0.5 * tf.reduce_mean(
     1 + z_log_sigma_sq - tf.square(z_mean) - tf.exp(z_log_sigma_sq))
-loss_VAE = loss_reconstr + loss_z
+loss_VAE = loss_reconstr + 0.01 * loss_z
 
 # loss classifier
 y_target = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
@@ -156,7 +158,7 @@ y_kl_strength = tf.placeholder(dtype=tf.float32)
 loss_classifier = loss_classifier_yz_x + y_kl_strength * loss_y_kl
 
 # optimizer
-learning_rate = 0.01
+learning_rate = 0.02
 optimizer_classifier_x_y = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier_x_y)
 optimizer_VAE = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_VAE)
 optimizer_classifier = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier)
@@ -170,7 +172,7 @@ hit_num = tf.reduce_sum(tf.to_int32(tf.equal(inferred_category, y_label)))
 with tf.Session() as sess:
     tf.initialize_all_variables().run()
     # initialize x -> y
-    epochs = 0
+    epochs = 200
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
         total_cost = 0.0
@@ -191,7 +193,7 @@ with tf.Session() as sess:
                 
         print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit) / n_samples)
     
-    epochs = 100
+    epochs = 500
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
         total_cost = 0.0

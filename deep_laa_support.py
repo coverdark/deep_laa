@@ -1,9 +1,8 @@
 import numpy as np
-import numpy.matlib
 import tensorflow as tf
+import numpy.matlib
 import scipy.io
 import os
-
 from fpformat import sci
 
 def convert_mat_to_one_hot_npz(read_file, write_file=""):
