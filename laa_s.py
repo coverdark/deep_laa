@@ -120,7 +120,7 @@ with tf.Session() as sess:
             _, batch_y_classifier, batch_hit_num = sess.run(
                 [optimizer_classifier_x_y, y_classifier, hit_num], 
                 feed_dict={x:batch_x, mask:batch_mask, y_label:batch_y_label, y_target:batch_majority_y})
-            total_hit += batch_hit_num        
+            total_hit += batch_hit_num
             
 #             if epoch == epochs-1:
 #                 debug_y_classifier = sess.run(

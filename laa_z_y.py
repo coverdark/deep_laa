@@ -4,9 +4,9 @@ import deep_laa_support as dls
 import sys
 
 # read data
-# filename = "web_processed_data_feature_2"
+filename = "web_processed_data_feature_2"
 # filename = "age_data_3_category"
-filename = "bluebird_data"
+# filename = "bluebird_data"
 # filename = "flower_data"
 data_all = np.load(filename+'.npz')
 user_labels = data_all['user_labels']
@@ -72,11 +72,13 @@ with tf.variable_scope('encoder_x_z_y'):
     for i in range(n_z):
         if i == 0:
             loss_w_classifier_l2 = tf.nn.l2_loss(weights[i] - constraint_template_classifier)
+            # loss_w_classifier_l1 = tf.reduce_sum(tf.abs(weights[i] - constraint_template_classifier))
             loss_w_classifier_l1 = tf.reduce_sum(tf.abs(weights[i]))
             loss_b_classifier_l2 = tf.nn.l2_loss(biases[i] - np.zeros([category_size]))
             loss_b_classifier_l1 = tf.reduce_sum(tf.abs(biases[i]))
         else:
             loss_w_classifier_l2 += tf.nn.l2_loss(weights[i] - constraint_template_classifier)
+            # loss_w_classifier_l1 += tf.reduce_sum(tf.abs(weights[i] - constraint_template_classifier))
             loss_w_classifier_l1 += tf.reduce_sum(tf.abs(weights[i]))
             loss_b_classifier_l2 += tf.nn.l2_loss(biases[i] - np.zeros([category_size]))
             loss_b_classifier_l1 += tf.reduce_sum(tf.abs(biases[i]))
@@ -115,11 +117,13 @@ with tf.variable_scope('decoder_yz_x'):
     for i in range(n_z):
         if i == 0:
             loss_w_decoder_l2 = tf.nn.l2_loss(weights[i] - constraint_template_decoder)
+            # loss_w_decoder_l1 = tf.reduce_sum(tf.abs(weights[i] - constraint_template_decoder))
             loss_w_decoder_l1 = tf.reduce_sum(tf.abs(weights[i]))
             loss_b_decoder_l2 = tf.nn.l2_loss(biases[i] - np.zeros([input_size]))
             loss_b_decoder_l1 = tf.reduce_sum(tf.abs(biases[i]))
         else:
             loss_w_decoder_l2 += tf.nn.l2_loss(weights[i] - constraint_template_decoder)
+            # loss_w_decoder_l1 += tf.reduce_sum(tf.abs(weights[i] - constraint_template_decoder))
             loss_w_decoder_l1 += tf.reduce_sum(tf.abs(weights[i]))
             loss_b_decoder_l2 += tf.nn.l2_loss(biases[i] - np.zeros([input_size]))
             loss_b_decoder_l1 += tf.reduce_sum(tf.abs(biases[i]))
