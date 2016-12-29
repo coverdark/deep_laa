@@ -6,7 +6,7 @@ import sys
 # read data
 # filename = "web_processed_data_feature_2"
 # filename = "age_data_3_category"
-filename = "bluebird_data"
+# filename = "bluebird_data"
 # filename = "flower_data"
 data_all = np.load(filename+'.npz')
 user_labels = data_all['user_labels']
