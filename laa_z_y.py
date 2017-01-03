@@ -21,7 +21,7 @@ mv_y = dls.get_majority_y(user_labels, category_size)
 input_size = source_num * category_size
 batch_size = n_samples
 
-n_z = 2
+n_z = 5
 
 # define x
 x = tf.placeholder(dtype=tf.float32, shape=(batch_size, input_size))
@@ -41,13 +41,19 @@ with tf.variable_scope('encoder_x_z'):
         tf.truncated_normal(shape=(input_size, n_z), mean=0.0, stddev=0.01), name='w_encoder')
     biases = tf.Variable(
         tf.zeros(shape=([n_z]), dtype=tf.float32), name='b_encoder')
-    z = tf.nn.softmax(
-        tf.add(tf.matmul(x, weights), biases))
+    z = tf.nn.softplus(tf.add(tf.matmul(x, weights), biases))
+    # z = tf.nn.softmax(
+    #     tf.add(tf.matmul(x, weights), biases))
     print "x -> z, OK"
     
     # loss
     loss_z_entropy = - tf.reduce_mean(tf.reduce_sum(tf.mul(z, tf.log(z+1e-10)), reduction_indices=1))
     loss_z_mean = tf.reduce_sum(tf.square((tf.reduce_mean(z, reduction_indices=0) - 1.0/n_z*np.ones(shape=[1, n_z]))))
+    loss_z_weights_l2 = tf.nn.l2_loss(weights)
+    loss_z_biases_l2 = tf.nn.l2_loss(biases)
+    loss_z_weights_l1 = tf.reduce_sum(tf.abs(weights))
+    loss_z_biases_l1 = tf.reduce_sum(tf.abs(biases))
+    loss_z_l1 = tf.reduce_sum(tf.abs(z))
     
 # x, z -> y    
 with tf.variable_scope('encoder_x_z_y'):
@@ -74,13 +80,13 @@ with tf.variable_scope('encoder_x_z_y'):
             loss_w_classifier_l2 = tf.nn.l2_loss(weights[i] - constraint_template_classifier)
             # loss_w_classifier_l1 = tf.reduce_sum(tf.abs(weights[i] - constraint_template_classifier))
             loss_w_classifier_l1 = tf.reduce_sum(tf.abs(weights[i]))
-            loss_b_classifier_l2 = tf.nn.l2_loss(biases[i] - np.zeros([category_size]))
+            loss_b_classifier_l2 = tf.nn.l2_loss(biases[i])
             loss_b_classifier_l1 = tf.reduce_sum(tf.abs(biases[i]))
         else:
             loss_w_classifier_l2 += tf.nn.l2_loss(weights[i] - constraint_template_classifier)
             # loss_w_classifier_l1 += tf.reduce_sum(tf.abs(weights[i] - constraint_template_classifier))
             loss_w_classifier_l1 += tf.reduce_sum(tf.abs(weights[i]))
-            loss_b_classifier_l2 += tf.nn.l2_loss(biases[i] - np.zeros([category_size]))
+            loss_b_classifier_l2 += tf.nn.l2_loss(biases[i])
             loss_b_classifier_l1 += tf.reduce_sum(tf.abs(biases[i]))
 
 # y, z -> x
@@ -149,7 +155,11 @@ loss_classifier = loss_classifier_y_x \
     + y_kl_strength*loss_y_kl \
     + 0.005/source_num/category_size/category_size * (loss_w_classifier_l2 + loss_b_classifier_l2 + loss_w_decoder_l2 + loss_b_decoder_l2) \
     + 0.005/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
-    + 0.05*loss_z_entropy
+    + 0.2/source_num/n_z/n_z * (loss_z_weights_l2 + loss_z_biases_l2) \
+    + 0.2/source_num/n_z/n_z * (loss_z_weights_l1 + loss_z_biases_l1) \
+#    + 0.0000001/n_z * loss_z_l1
+#    + 0.005*loss_z_entropy
+    
 
 # optimizer
 learning_rate = 0.005
@@ -209,8 +219,8 @@ with tf.Session() as sess:
             debug_z, debug_loss_z_entropy, debug_loss_z_mean, debug_loss_classifier_y_x, debug_loss_classifier = sess.run(
                 [z, loss_z_entropy, loss_z_mean, loss_classifier_y_x, loss_classifier],
                 feed_dict={x:batch_x, mask:batch_mask, y_label:batch_y_label, y_prior:batch_majority_y, y_kl_strength:0.0001})
-#            print debug_z
-            print "loss_z_entropy:     ", debug_loss_z_entropy
+            print debug_z
+            # print "loss_z_entropy:     ", debug_loss_z_entropy
             print "loss_z_mean:        ", debug_loss_z_mean
             print "loss_classifier_y_x:", debug_loss_classifier_y_x
             print "loss_total:         ", debug_loss_classifier
