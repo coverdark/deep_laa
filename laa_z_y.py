@@ -4,9 +4,9 @@ import deep_laa_support as dls
 import sys
 
 # read data
-filename = "web_processed_data_feature_2"
+# filename = "web_processed_data_feature_2"
 # filename = "age_data_3_category"
-# filename = "bluebird_data"
+filename = "bluebird_data"
 # filename = "flower_data"
 data_all = np.load(filename+'.npz')
 user_labels = data_all['user_labels']
@@ -21,7 +21,8 @@ mv_y = dls.get_majority_y(user_labels, category_size)
 input_size = source_num * category_size
 batch_size = n_samples
 
-n_z = 5
+n_z = 2
+flag_deep_z = False
 
 # define x
 x = tf.placeholder(dtype=tf.float32, shape=(batch_size, input_size))
@@ -37,11 +38,25 @@ constant_y = dls.get_constant_y(batch_size, category_size)
 
 # x -> z
 with tf.variable_scope('encoder_x_z'):
-    weights = tf.Variable(
-        tf.truncated_normal(shape=(input_size, n_z), mean=0.0, stddev=0.01), name='w_encoder')
-    biases = tf.Variable(
-        tf.zeros(shape=([n_z]), dtype=tf.float32), name='b_encoder')
-    z = tf.nn.softplus(tf.add(tf.matmul(x, weights), biases))
+    if not flag_deep_z:
+        weights = tf.Variable(
+            tf.truncated_normal(shape=(input_size, n_z), mean=0.0, stddev=0.01), name='w_encoder')
+        biases = tf.Variable(
+            tf.zeros(shape=([n_z]), dtype=tf.float32), name='b_encoder')
+        z = tf.nn.softplus(tf.add(tf.matmul(x, weights), biases))
+    else:
+        n_hz = 10
+        weights_1 = tf.Variable(
+            tf.truncated_normal(shape=(input_size, n_hz), mean=0.0, stddev=0.01), name='w_encoder')
+        biases_1 = tf.Variable(
+            tf.zeros(shape=([n_hz]), dtype=tf.float32), name='b_encoder')
+        hz = tf.nn.softplus(tf.add(tf.matmul(x, weights_1), biases_1))
+        weights_2 = tf.Variable(
+            tf.truncated_normal(shape=(n_hz, n_z), mean=0.0, stddev=0.01), name='w_encoder')
+        biases_2 = tf.Variable(
+            tf.zeros(shape=([n_z]), dtype=tf.float32), name='b_encoder')
+        z = tf.nn.softplus(tf.add(tf.matmul(hz, weights_2), biases_2))
+        print "deep z"
     # z = tf.nn.softmax(
     #     tf.add(tf.matmul(x, weights), biases))
     print "x -> z, OK"
@@ -49,10 +64,16 @@ with tf.variable_scope('encoder_x_z'):
     # loss
     loss_z_entropy = - tf.reduce_mean(tf.reduce_sum(tf.mul(z, tf.log(z+1e-10)), reduction_indices=1))
     loss_z_mean = tf.reduce_sum(tf.square((tf.reduce_mean(z, reduction_indices=0) - 1.0/n_z*np.ones(shape=[1, n_z]))))
-    loss_z_weights_l2 = tf.nn.l2_loss(weights)
-    loss_z_biases_l2 = tf.nn.l2_loss(biases)
-    loss_z_weights_l1 = tf.reduce_sum(tf.abs(weights))
-    loss_z_biases_l1 = tf.reduce_sum(tf.abs(biases))
+    if not flag_deep_z:
+        loss_z_weights_l2 = tf.nn.l2_loss(weights)
+        loss_z_biases_l2 = tf.nn.l2_loss(biases)
+        loss_z_weights_l1 = tf.reduce_sum(tf.abs(weights))
+        loss_z_biases_l1 = tf.reduce_sum(tf.abs(biases))
+    else:
+        loss_z_weights_l2 = tf.nn.l2_loss(weights_1) + tf.nn.l2_loss(weights_2)
+        loss_z_biases_l2 = tf.nn.l2_loss(biases_1) + tf.nn.l2_loss(biases_2)
+        loss_z_weights_l1 = tf.reduce_sum(tf.abs(weights_1)) + tf.reduce_sum(tf.abs(weights_2))
+        loss_z_biases_l1 = tf.reduce_sum(tf.abs(biases_1)) + tf.reduce_sum(tf.abs(biases_2))
     loss_z_l1 = tf.reduce_sum(tf.abs(z))
     
 # x, z -> y    
