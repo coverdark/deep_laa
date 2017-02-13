@@ -5,9 +5,9 @@ import sys
 
 # read data
 # filename = "bluebird_data"
-# filename = "flower_data"
+filename = "flower_data"
 # filename = "web_processed_data_feature_2"
-filename = "age_data_3_category"
+# filename = "age_data_3_category"
 data_all = np.load(filename+'.npz')
 user_labels = data_all['user_labels']
 label_mask = data_all['label_mask']
@@ -16,7 +16,7 @@ category_size = data_all['category_num']
 source_num = data_all['source_num']
 n_samples, _ = np.shape(true_labels)
 
-majority_y = dls.get_majority_y(user_labels, category_size)
+majority_y = dls.get_majority_y(user_labels, source_num, category_size)
 
 input_size = source_num * category_size
 batch_size = n_samples
@@ -70,7 +70,8 @@ with tf.name_scope('classifier'):
 # constraints
 # classifier
 constraint_template_classifier = np.matlib.repmat(np.eye(category_size), source_num, 1)
-loss_w_classifier = tf.nn.l2_loss(weights_y_classifier - constraint_template_classifier)
+loss_w_classifier_w = tf.nn.l2_loss(weights_y_classifier - constraint_template_classifier)
+loss_w_classifier_l1 = tf.reduce_sum(tf.abs(weights_y_classifier))
 # decoder
 constraint_template_decoder = np.matlib.repmat(np.eye(category_size), 1, source_num)
 loss_w_decoder = tf.nn.l2_loss(weights_reconstr - constraint_template_decoder)
@@ -92,10 +93,13 @@ loss_classifier_y_x = tf.reduce_mean(tf.reduce_sum(_tmp_loss_backprop, reduction
 y_prior = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
 loss_y_kl = tf.reduce_mean(tf.reduce_sum(tf.mul(y_classifier, tf.log(1e-10 + y_classifier)) - tf.mul(y_classifier, tf.log(1e-10 + y_prior)), reduction_indices=1))
 y_kl_strength = tf.placeholder(dtype=tf.float32)
-loss_classifier = loss_classifier_y_x + y_kl_strength * loss_y_kl + 0.0001/source_num * (loss_w_classifier + loss_w_decoder)
+loss_classifier = loss_classifier_y_x \
+    + 0.0001 * loss_y_kl \
+    + 0.0/source_num/category_size/category_size * (loss_w_classifier_w + loss_w_decoder) \
+    + 0.005/source_num/category_size/category_size * loss_w_classifier_l1
 
 # optimizer
-learning_rate = 0.02
+learning_rate = 0.005
 optimizer_classifier_x_y = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier_x_y)
 optimizer_VAE = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_VAE)
 optimizer_classifier = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier)
@@ -109,7 +113,7 @@ hit_num = tf.reduce_sum(tf.to_int32(tf.equal(inferred_category, y_label)))
 with tf.Session() as sess:
     tf.initialize_all_variables().run()
     # initialize x -> y
-    epochs = 100
+    epochs = 50
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
         total_cost = 0.0

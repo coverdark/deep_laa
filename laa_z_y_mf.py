@@ -5,10 +5,10 @@ import sys
 import scipy.sparse
 
 # read data
-filename = "web_processed_data_feature_2"
+# filename = "web_processed_data_feature_2"
 # filename = "millionaire_non_empty_sparse"
 # filename = "age_data_3_category"
-# filename = "bluebird_data"
+filename = "bluebird_data"
 # filename = "flower_data"
 if not filename == "millionaire_non_empty_sparse":
     data_all = np.load(filename+'.npz')
@@ -32,7 +32,7 @@ mv_y = dls.get_majority_y(user_labels, source_num, category_size)
 input_size = source_num * category_size
 batch_size = n_samples
 
-n_z = 5
+n_z = 2
 flag_deep_z = False
 
 # define x
@@ -201,13 +201,13 @@ y_prior = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
 loss_y_kl = tf.reduce_mean(tf.reduce_sum(tf.mul(y, tf.log(1e-10 + y)) - tf.mul(y, tf.log(1e-10 + y_prior)), reduction_indices=1))
 y_kl_strength = tf.placeholder(dtype=tf.float32)
 loss_classifier = loss_classifier_y_x \
-    + y_kl_strength*loss_y_kl \
-    + 0.05/source_num/category_size/category_size * (loss_w_classifier_l2 + loss_b_classifier_l2 + loss_w_decoder_l2 + loss_b_decoder_l2) \
-    + 0.05/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
+    + 0.001 *loss_y_kl \
+    + 0.005/source_num/category_size/category_size * (loss_w_classifier_l2 + loss_b_classifier_l2 + loss_w_decoder_l2 + loss_b_decoder_l2) \
+    + 0.005/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
     + 0.05/source_num/category_size/n_samples * loss_mf \
-    + 0.005/source_num/category_size/n_z * loss_u \
-    + 0.005/n_samples/n_z *loss_z \
-    + 0.005/n_samples/n_z * loss_non_neg_z \
+#    + 0.005/source_num/category_size/n_z * loss_u \
+#    + 0.005/n_samples/n_z *loss_z \
+#    + 0.005/n_samples/n_z * loss_non_neg_z \
 #     + 0.2/source_num/n_z/n_z * (loss_z_weights_l2 + loss_z_biases_l2) \
 #     + 0.2/source_num/n_z/n_z * (loss_z_weights_l1 + loss_z_biases_l1) \
 #    + 0.0000001/n_z * loss_z_l1
@@ -217,7 +217,7 @@ loss_classifier = loss_classifier_y_x \
 #     loss_classifier += 0.0/source_num/category_size/category_size * loss_z_wise_weights \
 
 # optimizer
-learning_rate = 0.002
+learning_rate = 0.01
 optimizer_classifier_x_y = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier_x_y)
 # optimizer_VAE = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_VAE)
 optimizer_classifier = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier)
@@ -252,7 +252,7 @@ with tf.Session() as sess:
                 
         print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit) / n_samples)
     
-    epochs = 1000
+    epochs = 500
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
         total_cost = 0.0
@@ -276,9 +276,9 @@ with tf.Session() as sess:
                 feed_dict={x:batch_x, mask:batch_mask, y_label:batch_y_label, y_prior:batch_majority_y, y_kl_strength:0.0001})
 #             print debug_z[0:100,:]
             # print "loss_z_entropy:     ", debug_loss_z_entropy
-            print "loss_z_mean:        ", debug_loss_z_mean
-            print "loss_classifier_y_x:", debug_loss_classifier_y_x
-            print "loss_total:         ", debug_loss_classifier
+            # print "loss_z_mean:        ", debug_loss_z_mean
+            # print "loss_classifier_y_x:", debug_loss_classifier_y_x
+            # print "loss_total:         ", debug_loss_classifier
 #             print debug_z_weights
 #             print debug_z_bias
             
