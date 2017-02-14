@@ -2,33 +2,45 @@ import tensorflow as tf
 import numpy as np
 import deep_laa_support as dls
 import sys
+import scipy.sparse
+from numpy import save
 
 # read data
 # filename = "web_processed_data_feature_2"
+# filename = "millionaire_non_empty_sparse"
 # filename = "age_data_3_category"
-filename = "bluebird_data"
-# filename = "flower_data"
-data_all = np.load(filename+'.npz')
-user_labels = data_all['user_labels']
-label_mask = data_all['label_mask']
-true_labels = data_all['true_labels']
-category_size = data_all['category_num']
-source_num = data_all['source_num']
-n_samples, _ = np.shape(true_labels)
+# filename = "bluebird_data"
+filename = "flower_data"
+if not filename == "millionaire_non_empty_sparse":
+    data_all = np.load(filename+'.npz')
+    user_labels = data_all['user_labels']
+    label_mask = data_all['label_mask']
+    true_labels = data_all['true_labels']
+    category_size = data_all['category_num']
+    source_num = data_all['source_num']
+    n_samples, _ = np.shape(true_labels)
+else:
+    data_all = scipy.io.loadmat(filename+'.mat')
+    user_labels = data_all['user_labels']
+    label_mask = data_all['label_mask']
+    true_labels = data_all['true_labels']
+    category_size = data_all['category_num'][0,0]
+    source_num = data_all['source_num'][0,0]
+    n_samples, _ = np.shape(true_labels)
 
-mv_y = dls.get_majority_y(user_labels, category_size)
+mv_y = dls.get_majority_y(user_labels, source_num, category_size)
 
 input_size = source_num * category_size
 batch_size = n_samples
 
-n_z = 2
+n_z = 1
 flag_deep_z = False
 
 # define x
 x = tf.placeholder(dtype=tf.float32, shape=(batch_size, input_size))
 mask = tf.placeholder(dtype=tf.float32, shape=(batch_size, input_size))
 
-# define source0-wise template
+# define source-wise template
 source_wise_template = np.zeros((input_size, input_size), dtype=np.float32)
 for i in range(input_size):
     source_wise_template[i*category_size:(i+1)*category_size, i*category_size:(i+1)*category_size] = 1
@@ -59,6 +71,14 @@ with tf.variable_scope('encoder_x_z'):
         print "deep z"
     # z = tf.nn.softmax(
     #     tf.add(tf.matmul(x, weights), biases))
+    
+    u = tf.Variable(
+        tf.random_uniform(shape=(input_size, n_z), minval=1.0, maxval=2.0))
+    r = tf.matmul(z, u, transpose_b=True)
+    loss_mf = tf.nn.l2_loss(tf.mul(mask, (x - r)))
+    loss_z = tf.nn.l2_loss(z)
+    loss_u = tf.nn.l2_loss(u)
+    
     print "x -> z, OK"
     
     # loss
@@ -78,13 +98,13 @@ with tf.variable_scope('encoder_x_z'):
     
 # x, z -> y    
 with tf.variable_scope('encoder_x_z_y'):
-    weights = [tf.Variable(
+    c_weights = [tf.Variable(
         tf.truncated_normal(shape=(input_size, category_size), mean=0.0, stddev=0.01), name='w_encoder')
         for i in range(n_z)]
     biases = [tf.Variable(
         tf.zeros(shape=([category_size]), dtype=tf.float32), name='b_encoder')
         for i in range(n_z)]
-    tmp_y = [tf.add(tf.matmul(x, weights[i]), biases[i]) for i in range(n_z)]
+    tmp_y = [tf.add(tf.matmul(x, c_weights[i]), biases[i]) for i in range(n_z)]
     for i in range(n_z):
         tmp_z = tf.slice(z, [0, i], [-1, 1])
         if i == 0:
@@ -98,17 +118,19 @@ with tf.variable_scope('encoder_x_z_y'):
     constraint_template_classifier = np.matlib.repmat(np.eye(category_size), source_num, 1)
     for i in range(n_z):
         if i == 0:
-            loss_w_classifier_l2 = tf.nn.l2_loss(weights[i] - constraint_template_classifier)
+            loss_w_classifier_l2 = tf.nn.l2_loss(c_weights[i] - constraint_template_classifier)
             # loss_w_classifier_l1 = tf.reduce_sum(tf.abs(weights[i] - constraint_template_classifier))
-            loss_w_classifier_l1 = tf.reduce_sum(tf.abs(weights[i]))
+            loss_w_classifier_l1 = tf.reduce_sum(tf.abs(c_weights[i]))
             loss_b_classifier_l2 = tf.nn.l2_loss(biases[i])
             loss_b_classifier_l1 = tf.reduce_sum(tf.abs(biases[i]))
         else:
-            loss_w_classifier_l2 += tf.nn.l2_loss(weights[i] - constraint_template_classifier)
+            loss_w_classifier_l2 += tf.nn.l2_loss(c_weights[i] - constraint_template_classifier)
             # loss_w_classifier_l1 += tf.reduce_sum(tf.abs(weights[i] - constraint_template_classifier))
-            loss_w_classifier_l1 += tf.reduce_sum(tf.abs(weights[i]))
+            loss_w_classifier_l1 += tf.reduce_sum(tf.abs(c_weights[i]))
             loss_b_classifier_l2 += tf.nn.l2_loss(biases[i])
             loss_b_classifier_l1 += tf.reduce_sum(tf.abs(biases[i]))
+    if n_z > 1:
+        loss_w_diff = -tf.nn.l2_loss(c_weights[0] - c_weights[1])
 
 # y, z -> x
 with tf.variable_scope('decoder_yz_x'):
@@ -173,11 +195,15 @@ y_prior = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
 loss_y_kl = tf.reduce_mean(tf.reduce_sum(tf.mul(y, tf.log(1e-10 + y)) - tf.mul(y, tf.log(1e-10 + y_prior)), reduction_indices=1))
 y_kl_strength = tf.placeholder(dtype=tf.float32)
 loss_classifier = loss_classifier_y_x \
-    + y_kl_strength*loss_y_kl \
-    + 0.005/source_num/category_size/category_size * (loss_w_classifier_l2 + loss_b_classifier_l2 + loss_w_decoder_l2 + loss_b_decoder_l2) \
-    + 0.005/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
-    + 0.2/source_num/n_z/n_z * (loss_z_weights_l2 + loss_z_biases_l2) \
-    + 0.2/source_num/n_z/n_z * (loss_z_weights_l1 + loss_z_biases_l1) \
+    + 0.0001*loss_y_kl \
+    + 0.05/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
+    + 0.5/source_num/n_z/n_z * (loss_z_weights_l2 + loss_z_biases_l2) \
+#   + 0.000/source_num/category_size/n_samples * loss_mf \
+#   + 0.0/source_num/category_size/category_size * (loss_w_classifier_l2 + loss_b_classifier_l2 + loss_w_decoder_l2 + loss_b_decoder_l2) \
+#    + y_kl_strength*loss_y_kl
+#     + 0.01/source_num/n_z/n_z * (loss_z_weights_l1 + loss_z_biases_l1) \
+     
+#     + 0.001 /source_num/category_size/category_size * loss_w_diff \
 #    + 0.0000001/n_z * loss_z_l1
 #    + 0.005*loss_z_entropy
     
@@ -197,7 +223,7 @@ hit_num = tf.reduce_sum(tf.to_int32(tf.equal(inferred_category, y_label)))
 with tf.Session() as sess:
     tf.initialize_all_variables().run()
     # initialize x -> y
-    epochs = 10
+    epochs = 50
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
         total_cost = 0.0
@@ -218,7 +244,7 @@ with tf.Session() as sess:
                 
         print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit) / n_samples)
     
-    epochs = 1000
+    epochs = 500
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
         total_cost = 0.0
@@ -235,15 +261,21 @@ with tf.Session() as sess:
             total_hit += batch_hit_num
               
         print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit)/n_samples)
-         
         if epoch == epochs-1:
-            debug_z, debug_loss_z_entropy, debug_loss_z_mean, debug_loss_classifier_y_x, debug_loss_classifier = sess.run(
-                [z, loss_z_entropy, loss_z_mean, loss_classifier_y_x, loss_classifier],
+            print_weight, print_z = sess.run(
+                [c_weights, z],
                 feed_dict={x:batch_x, mask:batch_mask, y_label:batch_y_label, y_prior:batch_majority_y, y_kl_strength:0.0001})
-            print debug_z
+            if float(total_hit)/n_samples > 0.8:
+                print "z"
+                print print_z
+                print "w0"
+                print print_weight[0]
+                print "w1"
+                print print_weight[1]
+            # print debug_z[0:20,:]
             # print "loss_z_entropy:     ", debug_loss_z_entropy
-            print "loss_z_mean:        ", debug_loss_z_mean
-            print "loss_classifier_y_x:", debug_loss_classifier_y_x
-            print "loss_total:         ", debug_loss_classifier
+            # print "loss_z_mean:        ", debug_loss_z_mean
+            # print "loss_classifier_y_x:", debug_loss_classifier_y_x
+            # print "loss_total:         ", debug_loss_classifier
             
 print "Done!" 
