@@ -4,13 +4,12 @@ import deep_laa_support as dls
 import sys
 import scipy.sparse
 from numpy import save
+import matplotlib.pyplot as plt
 
 # read data
 # filename = "web_processed_data_feature_2"
-# filename = "millionaire_non_empty_sparse"
-# filename = "age_data_3_category"
-# filename = "bluebird_data"
-filename = "flower_data"
+filename = "bluebird_data"
+# filename = "flower_data"
 if not filename == "millionaire_non_empty_sparse":
     data_all = np.load(filename+'.npz')
     user_labels = data_all['user_labels']
@@ -56,6 +55,7 @@ with tf.variable_scope('encoder_x_z'):
         biases = tf.Variable(
             tf.zeros(shape=([n_z]), dtype=tf.float32), name='b_encoder')
         z = tf.nn.softplus(tf.add(tf.matmul(x, weights), biases))
+#         z = tf.nn.sigmoid(tf.add(tf.matmul(x, weights), biases))
     else:
         n_hz = 10
         weights_1 = tf.Variable(
@@ -69,8 +69,6 @@ with tf.variable_scope('encoder_x_z'):
             tf.zeros(shape=([n_z]), dtype=tf.float32), name='b_encoder')
         z = tf.nn.softplus(tf.add(tf.matmul(hz, weights_2), biases_2))
         print "deep z"
-    # z = tf.nn.softmax(
-    #     tf.add(tf.matmul(x, weights), biases))
     
     u = tf.Variable(
         tf.random_uniform(shape=(input_size, n_z), minval=1.0, maxval=2.0))
@@ -177,39 +175,22 @@ with tf.variable_scope('decoder_yz_x'):
             loss_b_decoder_l2 += tf.nn.l2_loss(biases[i] - np.zeros([input_size]))
             loss_b_decoder_l1 += tf.reduce_sum(tf.abs(biases[i]))
 
-# loss VAE by given y_prob
-y_prob = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
-loss_reconstr = tf.reduce_mean(
-    tf.reduce_sum(tf.mul(reconstr_x, y_prob), reduction_indices=1))
-# loss_VAE = loss_reconstr + 0.0001/source_num * loss_w_decoder
-
 # loss classifier
 y_target = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
 _tmp_classifier_cross_entropy = - tf.mul(y_target, tf.log(1e-10 + y))
 loss_classifier_x_y = tf.reduce_mean(tf.reduce_sum(_tmp_classifier_cross_entropy, reduction_indices=1))
 
-# tf.constant(reconstr_all): constant?
 _tmp_loss_backprop = tf.mul(y, reconstr_x)
 loss_classifier_y_x = tf.reduce_mean(tf.reduce_sum(_tmp_loss_backprop, reduction_indices=1))
 y_prior = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
 loss_y_kl = tf.reduce_mean(tf.reduce_sum(tf.mul(y, tf.log(1e-10 + y)) - tf.mul(y, tf.log(1e-10 + y_prior)), reduction_indices=1))
-y_kl_strength = tf.placeholder(dtype=tf.float32)
 loss_classifier = loss_classifier_y_x \
     + 0.0001*loss_y_kl \
-    + 0.05/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
-    + 0.5/source_num/n_z/n_z * (loss_z_weights_l2 + loss_z_biases_l2) \
-#   + 0.000/source_num/category_size/n_samples * loss_mf \
-#   + 0.0/source_num/category_size/category_size * (loss_w_classifier_l2 + loss_b_classifier_l2 + loss_w_decoder_l2 + loss_b_decoder_l2) \
-#    + y_kl_strength*loss_y_kl
-#     + 0.01/source_num/n_z/n_z * (loss_z_weights_l1 + loss_z_biases_l1) \
-     
-#     + 0.001 /source_num/category_size/category_size * loss_w_diff \
-#    + 0.0000001/n_z * loss_z_l1
-#    + 0.005*loss_z_entropy
-    
+    + 0.005/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
+    + 0.5/source_num/n_z/n_z * (loss_z_weights_l2 + loss_z_biases_l2)
 
 # optimizer
-learning_rate = 0.005
+learning_rate = 0.01
 optimizer_classifier_x_y = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier_x_y)
 # optimizer_VAE = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_VAE)
 optimizer_classifier = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier)
@@ -223,10 +204,10 @@ hit_num = tf.reduce_sum(tf.to_int32(tf.equal(inferred_category, y_label)))
 with tf.Session() as sess:
     tf.initialize_all_variables().run()
     # initialize x -> y
+    print "Initialize x -> y ..."
     epochs = 50
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
-        total_cost = 0.0
         total_hit = 0
         for batch in xrange(total_batches):
             batch_x, batch_mask, batch_y_label, batch_majority_y = user_labels, label_mask, true_labels, mv_y
@@ -234,20 +215,14 @@ with tf.Session() as sess:
             _, batch_y_classifier, batch_hit_num = sess.run(
                 [optimizer_classifier_x_y, y, hit_num], 
                 feed_dict={x:batch_x, y_label:batch_y_label, y_target:batch_majority_y})
-            total_hit += batch_hit_num        
-            
-#             if epoch == epochs-1:
-#                 debug_y_classifier = sess.run(
-#                     [y_classifier],
-#                     feed_dict={x:batch_x, mask:batch_mask})
-#                 print debug_y_classifier
+            total_hit += batch_hit_num
                 
         print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit) / n_samples)
     
-    epochs = 500
+    print "Train the whole network ..."
+    epochs = 100
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
-        total_cost = 0.0
         total_hit = 0
         for batch in xrange(total_batches):
             batch_x, batch_mask, batch_y_label, batch_majority_y = user_labels, label_mask, true_labels, mv_y
@@ -256,26 +231,8 @@ with tf.Session() as sess:
             # x -> y, update classifier
             _, batch_y_classifier, batch_hit_num = sess.run(
                 [optimizer_classifier, y, hit_num], 
-                feed_dict={x:batch_x, mask:batch_mask, y_label:batch_y_label, y_prior:batch_majority_y, y_kl_strength:0.0001})
-             
+                feed_dict={x:batch_x, mask:batch_mask, y_label:batch_y_label, y_prior:batch_majority_y})
             total_hit += batch_hit_num
               
-        print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit)/n_samples)
-        if epoch == epochs-1:
-            print_weight, print_z = sess.run(
-                [c_weights, z],
-                feed_dict={x:batch_x, mask:batch_mask, y_label:batch_y_label, y_prior:batch_majority_y, y_kl_strength:0.0001})
-            if float(total_hit)/n_samples > 0.8:
-                print "z"
-                print print_z
-                print "w0"
-                print print_weight[0]
-                print "w1"
-                print print_weight[1]
-            # print debug_z[0:20,:]
-            # print "loss_z_entropy:     ", debug_loss_z_entropy
-            # print "loss_z_mean:        ", debug_loss_z_mean
-            # print "loss_classifier_y_x:", debug_loss_classifier_y_x
-            # print "loss_total:         ", debug_loss_classifier
-            
+        print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit)/n_samples)            
 print "Done!" 
