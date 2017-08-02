@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 
 # read data
 # filename = "web_processed_data_feature_2"
-filename = "bluebird_data"
-# filename = "flower_data"
+# filename = "bluebird_data"
+filename = "flower_data"
 if not filename == "millionaire_non_empty_sparse":
     data_all = np.load(filename+'.npz')
     user_labels = data_all['user_labels']
@@ -32,7 +32,7 @@ mv_y = dls.get_majority_y(user_labels, source_num, category_size)
 input_size = source_num * category_size
 batch_size = n_samples
 
-n_z = 1 # number of latent aspects
+n_z = 2 # number of latent aspects
 flag_deep_z = False
 
 # define x
@@ -187,11 +187,11 @@ loss_y_kl = tf.reduce_mean(tf.reduce_sum(tf.mul(y, tf.log(1e-10 + y)) - tf.mul(y
 # use proper parameters
 loss_classifier = loss_classifier_y_x \
     + 0.0001*loss_y_kl \
-    + 0.005/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
-    + 0.5/source_num/n_z/n_z * (loss_z_weights_l2 + loss_z_biases_l2)
+    + 0.05/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
+    + 0.1/source_num/n_z/n_z * (loss_z_weights_l2 + loss_z_biases_l2)
 
 # optimizer
-learning_rate = 0.01
+learning_rate = 0.001
 optimizer_classifier_x_y = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier_x_y)
 # optimizer_VAE = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_VAE)
 optimizer_classifier = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_classifier)
@@ -221,7 +221,7 @@ with tf.Session() as sess:
         print "epoch: {0} accuracy: {1}".format(epoch, float(total_hit) / n_samples)
     
     print "Train the whole network ..."
-    epochs = 100
+    epochs = 500
     total_batches = int(n_samples / batch_size)
     for epoch in xrange(epochs):
         total_hit = 0
