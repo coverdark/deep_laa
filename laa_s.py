@@ -80,6 +80,7 @@ loss_classifier_y_x = tf.reduce_mean(tf.reduce_sum(_tmp_loss_backprop, reduction
 y_prior = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
 loss_y_kl = tf.reduce_mean(tf.reduce_sum(tf.mul(y_classifier, tf.log(1e-10 + y_classifier)) - tf.mul(y_classifier, tf.log(1e-10 + y_prior)), reduction_indices=1))
 y_kl_strength = tf.placeholder(dtype=tf.float32)
+# use proper parameters
 loss_classifier = loss_classifier_y_x \
     + 0.0001 * loss_y_kl \
     + 0.005/source_num/category_size/category_size * loss_w_classifier_l1

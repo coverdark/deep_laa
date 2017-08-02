@@ -32,7 +32,7 @@ mv_y = dls.get_majority_y(user_labels, source_num, category_size)
 input_size = source_num * category_size
 batch_size = n_samples
 
-n_z = 1
+n_z = 1 # number of latent aspects
 flag_deep_z = False
 
 # define x
@@ -184,6 +184,7 @@ _tmp_loss_backprop = tf.mul(y, reconstr_x)
 loss_classifier_y_x = tf.reduce_mean(tf.reduce_sum(_tmp_loss_backprop, reduction_indices=1))
 y_prior = tf.placeholder(dtype=tf.float32, shape=(batch_size, category_size))
 loss_y_kl = tf.reduce_mean(tf.reduce_sum(tf.mul(y, tf.log(1e-10 + y)) - tf.mul(y, tf.log(1e-10 + y_prior)), reduction_indices=1))
+# use proper parameters
 loss_classifier = loss_classifier_y_x \
     + 0.0001*loss_y_kl \
     + 0.005/source_num/category_size/category_size * (loss_w_classifier_l1 + loss_b_classifier_l1 + loss_w_decoder_l1 + loss_b_decoder_l1) \
